@@ -1,8 +1,8 @@
 export class Memory {
-    private data = new Map<number, number>();
+    private data: Map<number, number> = new Map<number, number>();
 
     public read(address: number): number {
-        return this.data.get(address) ?? 0;
+        return this.data.get(address) ?? NaN;
     };
 
     public write(address: number, value: number): void {

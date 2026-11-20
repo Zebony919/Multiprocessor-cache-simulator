@@ -1,8 +1,4 @@
-export type MainMemory = {
-    numOfAddresses: number,
-    full: boolean,
-    data: number[],
-}
+import { Memory } from './memory.ts'
 
 export type CacheLine = {
     valid: boolean,
@@ -11,20 +7,24 @@ export type CacheLine = {
 }
 
 export interface Cache {
+    cacheId: number;
+    memory: Memory;
     lines: CacheLine[];
     numLines: number;
     blockSize: number;
 
-    read(): number;
+    read(address: number): number;
     write(): number;
 }
 
 export class DirectCache implements Cache {
+    cacheId: number;
+    memory: Memory;
     lines: CacheLine[];
     numLines: number;
     blockSize: number;
 
-    constructor(numLines: number, blockSize: number) {
+    constructor(id: number, memory: Memory, numLines: number, blockSize: number) {
         if (!Number.isInteger(numLines) || numLines <= 0) {
             throw new RangeError('numLines must be a positive integer');
         }
@@ -32,6 +32,8 @@ export class DirectCache implements Cache {
             throw new RangeError('blockSize must be a positive integer');
         }
 
+        this.cacheId = id;
+        this.memory = memory;
         this.numLines = numLines;
         this.blockSize = blockSize;
         this.lines = Array.from({ length: numLines }, () => ({
@@ -41,7 +43,11 @@ export class DirectCache implements Cache {
         }));
     }
 
-    public read(): number {
+    public read(address: number): number {
+        let data = this.memory.read(address);
+
+        if (!data)
+
         return 0;
     };
 
