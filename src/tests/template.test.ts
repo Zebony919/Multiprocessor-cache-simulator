@@ -1,6 +1,6 @@
 // Test Templates
 import { expect, test } from 'vitest';
-import { add } from './template.ts';
+import { add } from '../template.ts';
 
 // One Unit test
 test('add numbers', () => {

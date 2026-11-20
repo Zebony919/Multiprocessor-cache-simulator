@@ -1,12 +1,16 @@
-let mainMemory: number[] = [];
+export type MainMemory = {
+    numOfAddresses: number,
+    full: boolean,
+    data: number[],
+}
 
 export type CacheLine = {
     valid: boolean,
     tag: number,
-    data: number[]
+    data: number[],
 }
 
-interface Cache {
+export interface Cache {
     lines: CacheLine[];
     numLines: number;
     blockSize: number;
