@@ -7,8 +7,8 @@ test('initializes the requested cache lines and block sizes', () => {
     const cache = new DirectCache(0, mainMemory, 2, 4);
 
     expect(cache.lines).toEqual([
-        { valid: false, tag: 0, data: [0, 0, 0, 0] },
-        { valid: false, tag: 0, data: [0, 0, 0, 0] }
+        { modified: false, valid: false, tag: 0, data: [NaN, NaN, NaN, NaN] },
+        { modified: false, valid: false, tag: 0, data: [NaN, NaN, NaN, NaN] }
     ]);
 });
 
@@ -18,7 +18,7 @@ test('DirectCache: keeps each cache line data block independent', () => {
 
     cache.lines[0].data[0] = 7;
 
-    expect(cache.lines[1].data).toEqual([0, 0]);
+    expect(cache.lines[1].data).toEqual([NaN, NaN]);
 });
 
 test('DirectCache: rejects non-positive or non-integer dimensions', () => {
@@ -27,3 +27,20 @@ test('DirectCache: rejects non-positive or non-integer dimensions', () => {
     expect(() => new DirectCache(0, mainMemory, 2, 4.5)).toThrow(RangeError);
     expect(() => new DirectCache(0, mainMemory, -2, 4)).toThrow(RangeError);
 });
+
+test('DirectCache: read from cache with data in cache', () => {
+    const mainMemory = new Memory();
+    const cache = new DirectCache(0, mainMemory, 2, 2);
+
+    mainMemory.write(0x0000, 10);
+    mainMemory.write(0x0001, 11);
+    mainMemory.write(0x0002, 12);
+
+    cache.write(0x0000, 10);
+    cache.write(0x0001, 11);
+    cache.write(0x0002, 12);
+
+    let data = cache.read(0x0000);
+
+    expect(data).toEqual(10);
+})
