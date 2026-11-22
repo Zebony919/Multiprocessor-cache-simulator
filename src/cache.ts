@@ -1,7 +1,7 @@
 import { Memory } from './memory.ts'
 
 export type CacheLine = {
-    modified: boolean;
+    modified: boolean,
     valid: boolean,
     tag: number,
     data: number[],
@@ -52,6 +52,10 @@ export class DirectCache implements Cache {
         }));
     }
 
+    public setMemory(memory: Memory): void {
+        this.memory = memory;
+    }
+
     private splitAddress(address: number): [number, number, number] {
         let offSetBits = Number(address & (this.blockSize - 1));
         let indexBits = Number((address >>> this.offSetBits) & (this.numLines - 1));
@@ -63,20 +67,12 @@ export class DirectCache implements Cache {
     public read(address: number): number {
         let [offSet, index, tag] = this.splitAddress(address);
         let data = this.lines[index].data[offSet];
-        let curData = this.memory.read(address);
-
-        if (Number.isNaN(data) || (data != curData)) {
-            if (!Number.isNaN(curData)) {
-                this.write(address, curData);
-            } else {
-                throw new ReferenceError(`Data does not exist at address ${address}`);
-            }
-        } 
 
         return data;
     };
 
-    public write(address: number, value: number): void {
+    public write(address: number): void {
+        let value = this.memory.read(address);
         let [offSet, index, tag] = this.splitAddress(address);
         this.lines[index].data[offSet] = value;
     }

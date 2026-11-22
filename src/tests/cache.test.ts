@@ -1,6 +1,6 @@
-import { expect, test } from 'vitest';
+import { expect, test } from 'vitest'
 import { Memory } from '../memory.ts'
-import { DirectCache } from '../cache.ts';
+import { DirectCache } from '../cache.ts'
 
 test('initializes the requested cache lines and block sizes', () => {
     const mainMemory = new Memory();
@@ -36,11 +36,28 @@ test('DirectCache: read from cache with data in cache', () => {
     mainMemory.write(0x0001, 11);
     mainMemory.write(0x0002, 12);
 
-    cache.write(0x0000, 10);
-    cache.write(0x0001, 11);
-    cache.write(0x0002, 12);
+    cache.write(0x0000);
+    cache.write(0x0001);
+    cache.write(0x0002);
 
-    let data = cache.read(0x0000);
+    let data = cache.read(0x0001);
 
-    expect(data).toEqual(10);
+    expect(data).toEqual(11);
+})
+
+test('DirectCache: read from cache with NaN data', () => {
+    const mainMemory = new Memory();
+    const cache = new DirectCache(0, mainMemory, 2, 2);
+
+    mainMemory.write(0x0000, 10);
+    mainMemory.write(0x0001, 11);
+    mainMemory.write(0x0002, 12);
+
+    cache.write(0x0000);
+    cache.write(0x0001);
+    cache.write(0x0002);
+
+    let data = cache.read(0x0003);
+
+    expect(data).toEqual(NaN);
 })
