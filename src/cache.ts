@@ -1,93 +1,168 @@
 import { Memory } from './memory.ts'
 
-export type CacheLine = {
+export type CacheBlock = {
+    value: number | null,
+    tag: number | null,
     modified: boolean,
+}
+
+export type CacheLine = {
     valid: boolean,
-    tag: number,
-    data: number[],
+    data: CacheBlock[],
+}
+
+export type CacheResult = {
+    hit: boolean,
+    value: number | null,
 }
 
 export interface Cache {
     cacheId: number;
-    memory: Memory;
-    lines: CacheLine[];
-    numLines: number;
     blockSize: number;
-    offSetBits: number;
-    indexBits: number;
+    numSets: number;
+    numWays: number;
 
-    read(address: number): number;
-    write(address: number, value: number): void;
+    read(address: number): CacheResult;
+    write(address: number, value: number): CacheResult;
 }
 
-export class DirectCache implements Cache {
+export class SetAssociativeCache implements Cache {
     cacheId: number;
-    memory: Memory;
-    lines: CacheLine[];
-    numLines: number;
     blockSize: number;
-    offSetBits: number;
-    indexBits: number;
+    numSets: number;
+    numWays: number;
 
-    constructor(id: number, memory: Memory, numLines: number, blockSize: number) {
-        if (!Number.isInteger(numLines) || numLines <= 0) {
-            throw new RangeError('numLines must be a positive integer');
-        }
+    private readonly memory: Memory;
+    private readonly sets: CacheLine[][];
+    private readonly nextWay: number[];
+
+    constructor(id: number, memory: Memory, blockSize: number, numSets: number, numWays: number) {
         if (!Number.isInteger(blockSize) || blockSize <= 0) {
             throw new RangeError('blockSize must be a positive integer');
+        }
+        if (!Number.isInteger(numSets) || numSets <= 0) {
+            throw new RangeError('numSets must be a positive integer');
+        }
+        if (!Number.isInteger(numWays) || numWays <= 0) {
+            throw new RangeError('numWays must be a positive integer');
         }
 
         this.cacheId = id;
         this.memory = memory;
-        this.numLines = numLines;
         this.blockSize = blockSize;
-        this.offSetBits = Math.log2(blockSize);
-        this.indexBits = Math.log2(numLines);
-
-        this.lines = Array.from({ length: numLines }, () => ({
-            modified: false,
-            valid: false,
-            tag: 0,
-            data: Array<number>(blockSize).fill(NaN)
-        }));
+        this.numSets = numSets;
+        this.numWays = numWays;
+        this.nextWay = Array<number>(numSets).fill(0);
+        this.sets = Array.from({ length: numSets }, () =>
+            Array.from({ length: numWays }, () => ({
+                valid: false,
+                data: Array.from({ length: blockSize }, () => ({
+                    value: null,
+                    tag: null,
+                    modified: false,
+                }))
+            }))
+        );
     }
 
-    public setMemory(memory: Memory): void {
-        this.memory = memory;
+    private validateAddress(address: number): void {
+        if (!Number.isInteger(address) || address < 0) {
+            throw new RangeError('address must be a non-negative integer');
+        }
     }
 
     private splitAddress(address: number): [number, number, number] {
-        let offSetBits = Number(address & (this.blockSize - 1));
-        let indexBits = Number((address >>> this.offSetBits) & (this.numLines - 1));
-        let tagBits = Number(address >>> (this.offSetBits + this.indexBits));
+        const offset = address % this.blockSize;
+        const blockNumber = Math.floor(address / this.blockSize);
+        const setIndex = blockNumber % this.numSets;
+        const tag = Math.floor(blockNumber / this.numSets);
 
-        return [offSetBits, indexBits, tagBits];
+        return [offset, setIndex, tag];
     }
 
-    public read(address: number): number {
-        let [offSet, index, tag] = this.splitAddress(address);
-        let data = this.lines[index].data[offSet];
+    private findBlock(setIndex: number, tag: number): [number, CacheLine] | null {
+        for (let way = 0; way < this.numWays; way++) {
+            const line = this.sets[setIndex][way];
+            if (line.valid && line.data[0].tag === tag) {
+                return [way, line];
+            }
+        }
 
-        return data;
-    };
+        return null;
+    }
 
-    public write(address: number): void {
-        let value = this.memory.read(address);
-        let [offSet, index, tag] = this.splitAddress(address);
-        this.lines[index].data[offSet] = value;
+    private chooseWay(setIndex: number): number {
+        for (let way = 0; way < this.numWays; way++) {
+            if (!this.sets[setIndex][way].valid) {
+                return way;
+            }
+        }
+
+        const way = this.nextWay[setIndex];
+        this.nextWay[setIndex] = (way + 1) % this.numWays;
+        return way;
+    }
+
+    private fill(address: number, value?: number): CacheResult {
+        const [offset, setIndex, tag] = this.splitAddress(address);
+        const way = this.chooseWay(setIndex);
+        const line = this.sets[setIndex][way];
+        const blockNumber = Math.floor(address / this.blockSize);
+        const blockBase = blockNumber * this.blockSize;
+
+        line.valid = true;
+        line.data = Array.from({ length: this.blockSize }, (_, blockOffset) => {
+            if (blockOffset === offset && value !== undefined) {
+                return { value, tag, modified: true };
+            }
+
+            return {
+                value: this.memory.read(blockBase + blockOffset),
+                tag,
+                modified: false,
+            };
+        });
+
+        return {
+            hit: false,
+            value: value ?? line.data[offset].value,
+        };
+    }
+
+    public read(address: number): CacheResult {
+        this.validateAddress(address);
+        const [offset, setIndex, tag] = this.splitAddress(address);
+        const found = this.findBlock(setIndex, tag);
+
+        if (found !== null) {
+            const value = found[1].data[offset].value;
+            return { hit: value !== null, value };
+        }
+
+        return this.fill(address);
+    }
+
+    public write(address: number, value: number): CacheResult {
+        this.validateAddress(address);
+        if (!Number.isFinite(value)) {
+            throw new RangeError('value must be a finite number');
+        }
+
+        this.memory.write(address, value);
+
+        const [offset, setIndex, tag] = this.splitAddress(address);
+        const found = this.findBlock(setIndex, tag);
+
+        if (found !== null) {
+            found[1].valid = true;
+            found[1].data[offset] = {
+                value,
+                tag,
+                modified: true,
+            };
+            return { hit: true, value };
+        }
+
+        return this.fill(address, value);
     }
 };
-
-// Logic for eviction and modified data checks
-/*
-if (!Number.isNaN(data)) {
-    if (this.lines[index].modified) {
-        // Update Main Memory with Cacheline
-    } 
-
-    for (let i = 0; i < this.blockSize; i++) {
-        let newData = this.memory.read(address + i);
-        this.lines[index].data[i] = newData;
-    }
-}
-*/

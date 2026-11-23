@@ -1,24 +1,21 @@
 import { Memory } from './memory.ts'
-import { DirectCache } from './cache.ts'
+import { SetAssociativeCache } from './cache.ts'
 
 export type State = 'M' | 'O' | 'E' | 'S' | 'I';
 
-export type Op = {
-    cpuId: number,
-    type: 'R' | 'W',
-    address: number,
-    value ?: number,
-}
+export type Op =
+    | { cpuId: number, type: 'R', address: number }
+    | { cpuId: number, type: 'W', address: number, value: number };
 
 export type stepResult = {
     op: Op,
-    value ?: number,
+    value ?: number | null,
     hit: boolean,
     events?: Event[];
 }
 
 export type Event =
-  | { type: 'bus'; from: number; message: 'BusRd' | 'BusRdX' | 'BusUpgr' }
+    { type: 'bus'; from: number; message: 'BusRd' | 'BusRdX' | 'BusUpgr' }
   | { type: 'stateChange'; cpu: number; address: number; from: State; to: State }
   | { type: 'flush'; cpu: number; address: number }
   | { type: 'memoryWrite'; address: number; value: number }
@@ -26,13 +23,13 @@ export type Event =
 
 export class System {
     private mainMemory: Memory = new Memory(); 
-    private caches: DirectCache[];
+    private caches: SetAssociativeCache[];
     private program: Op[] = [];
     private pc = 0;
 
     constructor(numCaches: number) {
         this.caches = Array.from({ length: numCaches}, 
-            (_, i) => new DirectCache(i, this.mainMemory, 4, 4)
+            (_, i) => new SetAssociativeCache(i, this.mainMemory, 4, 4, 1)
         )
     }
 
@@ -61,13 +58,15 @@ export class System {
 
         if (instruction.type == 'R') {
             const data = this.caches[instruction.cpuId].read(instruction.address);
-            if (!Number.isNaN(data)) {
-                results.hit = true;
-                results.value = data;
-            }
+            results.hit = data.hit;
+            results.value = data.value;
         } else {
-            this.caches[instruction.cpuId].write(instruction.address);
-            results.value = this.caches[instruction.cpuId].read(instruction.address);
+            const data = this.caches[instruction.cpuId].write(
+                instruction.address,
+                instruction.value,
+            );
+            results.hit = data.hit;
+            results.value = data.value;
         }
 
         return results;
