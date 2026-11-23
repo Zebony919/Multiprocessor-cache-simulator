@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { System, type Op, type stepResult } from "../system.ts"
+import { System, type Op, type StepResult } from "../system.ts"
 
 test('System can execute small program (no states)', () => {
     const system = new System(1);
@@ -13,7 +13,7 @@ test('System can execute small program (no states)', () => {
 
     system.load(program);
 
-    let stepResult: stepResult | null = system.step();
+    let stepResult: StepResult | null = system.step();
 
     if (stepResult != null) {
         expect(stepResult.hit).toBe(false);

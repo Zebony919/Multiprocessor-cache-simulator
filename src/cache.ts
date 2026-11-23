@@ -1,14 +1,10 @@
 import { Memory } from './memory.ts'
 
-export type CacheBlock = {
-    value: number | null,
-    tag: number | null,
-    modified: boolean,
-}
-
 export type CacheLine = {
     valid: boolean,
-    data: CacheBlock[],
+    dirty: boolean,
+    tag: number,
+    data: (number | null)[],
 }
 
 export type CacheResult = {
@@ -16,17 +12,7 @@ export type CacheResult = {
     value: number | null,
 }
 
-export interface Cache {
-    cacheId: number;
-    blockSize: number;
-    numSets: number;
-    numWays: number;
-
-    read(address: number): CacheResult;
-    write(address: number, value: number): CacheResult;
-}
-
-export class SetAssociativeCache implements Cache {
+export class SetAssociativeCache {
     cacheId: number;
     blockSize: number;
     numSets: number;
@@ -54,41 +40,22 @@ export class SetAssociativeCache implements Cache {
         this.numWays = numWays;
         this.nextWay = Array<number>(numSets).fill(0);
         this.sets = Array.from({ length: numSets }, () =>
-            Array.from({ length: numWays }, () => ({
+            (Array.from({ length: numWays }, () => ({
                 valid: false,
-                data: Array.from({ length: blockSize }, () => ({
-                    value: null,
-                    tag: null,
-                    modified: false,
-                }))
-            }))
+                dirty: false,
+                tag: 0,
+                data: Array<number | null>(this.blockSize).fill(null)
+            })))
         );
     }
 
-    private validateAddress(address: number): void {
-        if (!Number.isInteger(address) || address < 0) {
-            throw new RangeError('address must be a non-negative integer');
-        }
-    }
-
-    private splitAddress(address: number): [number, number, number] {
+    private splitAddress(address: number): { tag: number, index: number, offset: number } {
         const offset = address % this.blockSize;
         const blockNumber = Math.floor(address / this.blockSize);
         const setIndex = blockNumber % this.numSets;
         const tag = Math.floor(blockNumber / this.numSets);
 
-        return [offset, setIndex, tag];
-    }
-
-    private findBlock(setIndex: number, tag: number): [number, CacheLine] | null {
-        for (let way = 0; way < this.numWays; way++) {
-            const line = this.sets[setIndex][way];
-            if (line.valid && line.data[0].tag === tag) {
-                return [way, line];
-            }
-        }
-
-        return null;
+        return { tag: tag, index: setIndex, offset: offset };
     }
 
     private chooseWay(setIndex: number): number {
@@ -104,38 +71,62 @@ export class SetAssociativeCache implements Cache {
     }
 
     private fill(address: number, value?: number): CacheResult {
-        const [offset, setIndex, tag] = this.splitAddress(address);
+        const { tag, index: setIndex, offset } = this.splitAddress(address);
         const way = this.chooseWay(setIndex);
         const line = this.sets[setIndex][way];
         const blockNumber = Math.floor(address / this.blockSize);
         const blockBase = blockNumber * this.blockSize;
 
-        line.valid = true;
-        line.data = Array.from({ length: this.blockSize }, (_, blockOffset) => {
-            if (blockOffset === offset && value !== undefined) {
-                return { value, tag, modified: true };
-            }
+        if (line.valid && line.dirty) {
+            const oldBlockNumber =
+                line.tag * this.numSets + setIndex;
+            const oldBlockBase = oldBlockNumber * this.blockSize;
 
-            return {
-                value: this.memory.read(blockBase + blockOffset),
-                tag,
-                modified: false,
-            };
-        });
+            for (let blockOffset = 0; blockOffset < this.blockSize; blockOffset++) {
+                const blockValue = line.data[blockOffset];
+                if (blockValue !== null) {
+                    this.memory.write(oldBlockBase + blockOffset, blockValue);
+                }
+            }
+        }
+
+        line.valid = true;
+        line.dirty = value !== undefined;
+        line.tag = tag;
+        line.data = Array.from(
+            { length: this.blockSize },
+            (_, blockOffset) => {
+                if (blockOffset === offset && value !== undefined) {
+                    return value;
+                }
+
+                return this.memory.read(blockBase + blockOffset);
+            },
+        );
 
         return {
             hit: false,
-            value: value ?? line.data[offset].value,
+            value: value ?? line.data[offset],
         };
     }
 
+    private findBlock(setIndex: number, tag: number): { way: number, cacheLine: CacheLine } | null {
+        for (let way = 0; way < this.numWays; way++) {
+            const line = this.sets[setIndex][way];
+            if (line.valid && line.tag === tag) {
+                return { way: way, cacheLine: line};
+            }
+        }
+
+        return null;
+    }
+
     public read(address: number): CacheResult {
-        this.validateAddress(address);
-        const [offset, setIndex, tag] = this.splitAddress(address);
+        const { tag, index: setIndex, offset } = this.splitAddress(address);
         const found = this.findBlock(setIndex, tag);
 
         if (found !== null) {
-            const value = found[1].data[offset].value;
+            const value = found.cacheLine.data[offset];
             return { hit: value !== null, value };
         }
 
@@ -143,23 +134,18 @@ export class SetAssociativeCache implements Cache {
     }
 
     public write(address: number, value: number): CacheResult {
-        this.validateAddress(address);
         if (!Number.isFinite(value)) {
             throw new RangeError('value must be a finite number');
         }
 
         this.memory.write(address, value);
 
-        const [offset, setIndex, tag] = this.splitAddress(address);
+        const { tag, index: setIndex, offset } = this.splitAddress(address);
         const found = this.findBlock(setIndex, tag);
 
         if (found !== null) {
-            found[1].valid = true;
-            found[1].data[offset] = {
-                value,
-                tag,
-                modified: true,
-            };
+            found.cacheLine.valid = true;
+            found.cacheLine.data[offset] = value;
             return { hit: true, value };
         }
 

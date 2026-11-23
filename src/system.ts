@@ -4,10 +4,10 @@ import { SetAssociativeCache } from './cache.ts'
 export type State = 'M' | 'O' | 'E' | 'S' | 'I';
 
 export type Op =
-    | { cpuId: number, type: 'R', address: number }
+      { cpuId: number, type: 'R', address: number }
     | { cpuId: number, type: 'W', address: number, value: number };
 
-export type stepResult = {
+export type StepResult = {
     op: Op,
     value ?: number | null,
     hit: boolean,
@@ -42,16 +42,16 @@ export class System {
         this.pc = 0;
     }
 
-    public step(): stepResult | null {
+    public step(): StepResult | null {
         if (this.pc >= this.program.length) return null;
 
         const op = this.program[this.pc++];
         return this.execute(op);
     }
 
-    private execute(instruction: Op): stepResult {
+    private execute(instruction: Op): StepResult {
         // Executes one instruction from given program
-        const results: stepResult = {
+        const results: StepResult = {
             op: instruction,
             hit: false,
         }
