@@ -77,9 +77,9 @@ export class SetAssociativeCache {
         const blockNumber = Math.floor(address / this.blockSize);
         const blockBase = blockNumber * this.blockSize;
 
+        // Updates Main memory if the line holds real and out of date data before replacing
         if (line.valid && line.dirty) {
-            const oldBlockNumber =
-                line.tag * this.numSets + setIndex;
+            const oldBlockNumber = line.tag * this.numSets + setIndex;
             const oldBlockBase = oldBlockNumber * this.blockSize;
 
             for (let blockOffset = 0; blockOffset < this.blockSize; blockOffset++) {
@@ -90,6 +90,7 @@ export class SetAssociativeCache {
             }
         }
 
+        // Replaces line with new block
         line.valid = true;
         line.dirty = value !== undefined;
         line.tag = tag;
@@ -110,11 +111,12 @@ export class SetAssociativeCache {
         };
     }
 
-    private findBlock(setIndex: number, tag: number): { way: number, cacheLine: CacheLine } | null {
+    private findLine(setIndex: number, tag: number): { way: number, cacheLine: CacheLine } | null {
+        const set = this.sets[setIndex];
+
         for (let way = 0; way < this.numWays; way++) {
-            const line = this.sets[setIndex][way];
-            if (line.valid && line.tag === tag) {
-                return { way: way, cacheLine: line};
+            if (set[way].valid && set[way].tag === tag) {
+                return { way: way, cacheLine: set[way]};
             }
         }
 
@@ -123,10 +125,10 @@ export class SetAssociativeCache {
 
     public read(address: number): CacheResult {
         const { tag, index: setIndex, offset } = this.splitAddress(address);
-        const found = this.findBlock(setIndex, tag);
+        const foundLine = this.findLine(setIndex, tag);
 
-        if (found !== null) {
-            const value = found.cacheLine.data[offset];
+        if (foundLine !== null) {
+            const value = foundLine.cacheLine.data[offset];
             return { hit: value !== null, value };
         }
 
@@ -141,11 +143,11 @@ export class SetAssociativeCache {
         this.memory.write(address, value);
 
         const { tag, index: setIndex, offset } = this.splitAddress(address);
-        const found = this.findBlock(setIndex, tag);
+        const foundLine = this.findLine(setIndex, tag);
 
-        if (found !== null) {
-            found.cacheLine.valid = true;
-            found.cacheLine.data[offset] = value;
+        if (foundLine !== null) {
+            foundLine.cacheLine.valid = true;
+            foundLine.cacheLine.data[offset] = value;
             return { hit: true, value };
         }
 

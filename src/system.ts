@@ -22,12 +22,14 @@ export type Event =
   | { type: 'fill'; cpu: number; address: number; source: 'memory' | number };
 
 export class System {
-    private mainMemory: Memory = new Memory(); 
+    private mainMemory: Memory;
     private caches: SetAssociativeCache[];
     private program: Op[] = [];
     private pc = 0;
 
-    constructor(numCaches: number) {
+    constructor(numCaches: number, memory: Memory) {
+        this.mainMemory = memory;
+
         this.caches = Array.from({ length: numCaches}, 
             (_, i) => new SetAssociativeCache(i, this.mainMemory, 4, 4, 1)
         )
@@ -38,6 +40,10 @@ export class System {
     }
 
     public load(program: Op[]): void {
+        for (let i = 0; i < program.length; i++) {
+            this.validateAddress(program[i].address);
+        }
+
         this.program = program;
         this.pc = 0;
     }
@@ -47,6 +53,12 @@ export class System {
 
         const op = this.program[this.pc++];
         return this.execute(op);
+    }
+
+    private validateAddress(address: number): void {
+        if (!Number.isInteger(address) || address < 0) {
+            throw new RangeError("Address must be a positive integer!")
+        }
     }
 
     private execute(instruction: Op): StepResult {
