@@ -4,12 +4,12 @@ export type CacheLine = {
     valid: boolean,
     dirty: boolean,
     tag: number,
-    data: (number | null)[],
+    data: number[],
 }
 
-export type CacheResult = {
+export type CacheResult = { 
     hit: boolean,
-    value: number | null,
+    value: number,
 }
 
 export class SetAssociativeCache {

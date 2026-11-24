@@ -35,10 +35,6 @@ export class System {
         )
     }
 
-    public writeToMemory(address: number, value: number): void {
-        this.mainMemory.write(address, value);
-    }
-
     public load(program: Op[]): void {
         for (let i = 0; i < program.length; i++) {
             this.validateAddress(program[i].address);

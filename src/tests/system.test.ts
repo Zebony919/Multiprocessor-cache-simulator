@@ -2,6 +2,19 @@ import { expect, test } from 'vitest'
 import { Memory } from '../memory.ts'
 import { System, type Op, type StepResult } from "../system.ts"
 
+test('System rejects invalid addresses in small program', () => {
+    const memory = new Memory();
+    const system = new System(1, memory);
+
+    let program: Op[] = [
+        { cacheId: 0, type: 'R', address: -1 },
+        { cacheId: 0, type: 'W', address: 0x0000, value: 12 },
+        { cacheId: 0, type: 'R', address: 0x0000 },
+    ];
+
+    expect(() => system.load(program)).toThrow(RangeError);
+})
+
 test('System can execute small program (no states)', () => {
     const memory = new Memory();
     memory.write(0x0000, 12);
@@ -31,19 +44,7 @@ test('System can execute small program (no states)', () => {
     expect(stepResult!.value).toBe(99);
 
     expect(memory.read(0x0000)).toEqual(12);
-})
-
-test('System rejects invalid addresses in small program', () => {
-    const memory = new Memory();
-    const system = new System(1, memory);
-
-    let program: Op[] = [
-        { cacheId: 0, type: 'R', address: -1 },
-        { cacheId: 0, type: 'W', address: 0x0000, value: 12 },
-        { cacheId: 0, type: 'R', address: 0x0000 },
-    ];
-
-    expect(() => system.load(program)).toThrow(RangeError);
+    expect(system.step()).toEqual(null);
 })
 
 test('System with two caches', () => {
@@ -90,4 +91,5 @@ test('System with two caches', () => {
     expect(stepResult!.hit).toBe(true);
 
     expect(memory.read(0x0000)).toEqual(10);
+    expect(system.step()).toEqual(null);
 })
