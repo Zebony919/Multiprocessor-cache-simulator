@@ -4,8 +4,8 @@ import { SetAssociativeCache } from './cache.ts'
 export type State = 'M' | 'O' | 'E' | 'S' | 'I';
 
 export type Op =
-      { cpuId: number, type: 'R', address: number }
-    | { cpuId: number, type: 'W', address: number, value: number };
+      { cacheId: number, type: 'R', address: number }
+    | { cacheId: number, type: 'W', address: number, value: number };
 
 export type StepResult = {
     op: Op,
@@ -31,7 +31,7 @@ export class System {
         this.mainMemory = memory;
 
         this.caches = Array.from({ length: numCaches}, 
-            (_, i) => new SetAssociativeCache(i, this.mainMemory, 4, 4, 1)
+            (_, i) => new SetAssociativeCache(i, this.mainMemory, 2, 2, 2)
         )
     }
 
@@ -69,11 +69,11 @@ export class System {
         }
 
         if (instruction.type == 'R') {
-            const data = this.caches[instruction.cpuId].read(instruction.address);
+            const data = this.caches[instruction.cacheId].read(instruction.address);
             results.hit = data.hit;
             results.value = data.value;
         } else {
-            const data = this.caches[instruction.cpuId].write(
+            const data = this.caches[instruction.cacheId].write(
                 instruction.address,
                 instruction.value,
             );

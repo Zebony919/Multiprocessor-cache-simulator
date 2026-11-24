@@ -44,7 +44,7 @@ export class SetAssociativeCache {
                 valid: false,
                 dirty: false,
                 tag: 0,
-                data: Array<number | null>(this.blockSize).fill(null)
+                data: Array<number>(this.blockSize).fill(0)
             })))
         );
     }
@@ -140,14 +140,13 @@ export class SetAssociativeCache {
             throw new RangeError('value must be a finite number');
         }
 
-        this.memory.write(address, value);
-
         const { tag, index: setIndex, offset } = this.splitAddress(address);
         const foundLine = this.findLine(setIndex, tag);
 
         if (foundLine !== null) {
             foundLine.cacheLine.valid = true;
             foundLine.cacheLine.data[offset] = value;
+            foundLine.cacheLine.dirty = true;
             return { hit: true, value };
         }
 
