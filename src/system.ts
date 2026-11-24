@@ -57,25 +57,36 @@ export class System {
         }
     }
 
+    private fetchBlock(address: number, cacheId: number): number[] {
+        for (let i = 0; i < this.caches.length; i++) {
+            if (i == cacheId) continue;
+
+            const block = this.caches[i].fetchBlock(address);
+            if (block) return block;
+        }
+
+        const { blockSize } = this.caches[cacheId];
+        const base = Math.floor(address / blockSize) * blockSize;
+        return Array.from({ length: blockSize }, (_, i) => this.mainMemory.read(base + i));
+    }
+
     private execute(instruction: Op): StepResult {
+        const cache = this.caches[instruction.cacheId];
+        const hit = cache.fetchBlock(instruction.address) != null;
+        if (!hit) cache.install(instruction.address, this.fetchBlock(instruction.address, instruction.cacheId));
+
         // Executes one instruction from given program
         const results: StepResult = {
             op: instruction,
             hit: false,
         }
 
-        if (instruction.type == 'R') {
-            const data = this.caches[instruction.cacheId].read(instruction.address);
-            results.hit = data.hit;
-            results.value = data.value;
-        } else {
-            const data = this.caches[instruction.cacheId].write(
-                instruction.address,
-                instruction.value,
-            );
-            results.hit = data.hit;
-            results.value = data.value;
-        }
+        const value = instruction.type == 'R'
+            ? cache.read(instruction.address).value
+            : cache.write(instruction.address, instruction.value).value;
+
+        results.value = value;
+        results.hit = hit;
 
         return results;
     }

@@ -67,8 +67,8 @@ test('System with two caches are incoherent without states', () => {
     expect(next()).toMatchObject({ hit: true, value: 12 });
     expect(next()).toMatchObject({ hit: true, value: 12 });
 
-    // second cache
-    expect(next()).toMatchObject({ hit: false, value: 10 });
+    // second cache checks first cache now 
+    expect(next()).toMatchObject({ hit: false, value: 12 });
     expect(next()).toMatchObject({ hit: true, value: 20 });
     expect(next()).toMatchObject({ hit: true, value: 20 });
 

@@ -70,12 +70,10 @@ export class SetAssociativeCache {
         return way;
     }
 
-    private fill(address: number, value?: number): CacheResult {
-        const { tag, index: setIndex, offset } = this.splitAddress(address);
+    public install(address: number, blockData: number[]): void {
+        const { tag, index: setIndex } = this.splitAddress(address);
         const way = this.chooseWay(setIndex);
         const line = this.sets[setIndex][way];
-        const blockNumber = Math.floor(address / this.blockSize);
-        const blockBase = blockNumber * this.blockSize;
 
         // Updates Main memory if the line holds real and out of date data before replacing
         if (line.valid && line.dirty) {
@@ -84,31 +82,15 @@ export class SetAssociativeCache {
 
             for (let blockOffset = 0; blockOffset < this.blockSize; blockOffset++) {
                 const blockValue = line.data[blockOffset];
-                if (blockValue !== null) {
-                    this.memory.write(oldBlockBase + blockOffset, blockValue);
-                }
+                this.memory.write(oldBlockBase + blockOffset, blockValue);
             }
         }
 
         // Replaces line with new block
         line.valid = true;
-        line.dirty = value !== undefined;
+        line.dirty = false;
         line.tag = tag;
-        line.data = Array.from(
-            { length: this.blockSize },
-            (_, blockOffset) => {
-                if (blockOffset === offset && value !== undefined) {
-                    return value;
-                }
-
-                return this.memory.read(blockBase + blockOffset);
-            },
-        );
-
-        return {
-            hit: false,
-            value: value ?? line.data[offset],
-        };
+        line.data = [...blockData];
     }
 
     private findLine(setIndex: number, tag: number): { way: number, cacheLine: CacheLine } | null {
@@ -123,16 +105,19 @@ export class SetAssociativeCache {
         return null;
     }
 
+    public fetchBlock(address: number): number[] | null {
+        const { tag, index } = this.splitAddress(address);
+        const foundLine = this.findLine(index, tag);
+        return foundLine ? [...foundLine.cacheLine.data] : null;
+    }
+
     public read(address: number): CacheResult {
         const { tag, index: setIndex, offset } = this.splitAddress(address);
         const foundLine = this.findLine(setIndex, tag);
+        if (!foundLine) throw new Error(`read of uncaches value at ${address}`);
 
-        if (foundLine !== null) {
-            const value = foundLine.cacheLine.data[offset];
-            return { hit: value !== null, value };
-        }
-
-        return this.fill(address);
+        const value = foundLine!.cacheLine.data[offset];
+        return { hit: value !== 0, value };
     }
 
     public write(address: number, value: number): CacheResult {
@@ -143,13 +128,9 @@ export class SetAssociativeCache {
         const { tag, index: setIndex, offset } = this.splitAddress(address);
         const foundLine = this.findLine(setIndex, tag);
 
-        if (foundLine !== null) {
-            foundLine.cacheLine.valid = true;
-            foundLine.cacheLine.data[offset] = value;
-            foundLine.cacheLine.dirty = true;
-            return { hit: true, value };
-        }
-
-        return this.fill(address, value);
+        foundLine!.cacheLine.valid = true;
+        foundLine!.cacheLine.data[offset] = value;
+        foundLine!.cacheLine.dirty = true;
+        return { hit: true, value };
     }
 };
