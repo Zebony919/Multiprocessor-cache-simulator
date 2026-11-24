@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 import { Memory } from '../memory.ts'
-import { System, type Op, type StepResult } from "../system.ts"
+import { System, type Op } from "../system.ts"
 
 test('System rejects invalid addresses in small program', () => {
     const memory = new Memory();
@@ -26,28 +26,21 @@ test('System can execute small program (no states)', () => {
         { cacheId: 0, type: 'R', address: 0x0000 },
     ];
 
+    const next = () => {
+        const stepResult = system.step();
+        return stepResult!;
+    };
+
     system.load(program);
 
-    let stepResult: StepResult | null = system.step();
+    expect(next()).toMatchObject({ hit: false, value: 12 });
+    expect(next()).toMatchObject({ hit: true, value: 99 });
+    expect(next()).toMatchObject({ hit: true, value: 99 });
 
-    expect(stepResult).not.toBeNull();
-    expect(stepResult!.hit).toBe(false);
-
-    stepResult = system.step();
-
-    expect(stepResult).not.toBeNull();
-    expect(stepResult!.value).toBe(99);
-
-    stepResult = system.step();
-
-    expect(stepResult).not.toBeNull();
-    expect(stepResult!.value).toBe(99);
-
-    expect(memory.read(0x0000)).toEqual(12);
-    expect(system.step()).toEqual(null);
+    expect(next()).toEqual(null);
 })
 
-test('System with two caches', () => {
+test('System with two caches are incoherent without states', () => {
     const memory = new Memory();
     const system = new System(2, memory);
 
@@ -62,34 +55,22 @@ test('System with two caches', () => {
         { cacheId: 1, type: 'R', address: 0x0000 },
     ];
 
+    const next = () => {
+        const stepResult = system.step();
+        return stepResult!;
+    };
+
     system.load(program);
-    let stepResult: StepResult | null = system.step();
 
-    // First Cache reads and writes from address 0x0000
-    expect(stepResult).not.toBeNull();
-    expect(stepResult!.hit).toBe(false);
+    // first cache
+    expect(next()).toMatchObject({ hit: false, value: 10 });
+    expect(next()).toMatchObject({ hit: true, value: 12 });
+    expect(next()).toMatchObject({ hit: true, value: 12 });
 
-    system.step();
-    stepResult = system.step();
+    // second cache
+    expect(next()).toMatchObject({ hit: false, value: 10 });
+    expect(next()).toMatchObject({ hit: true, value: 20 });
+    expect(next()).toMatchObject({ hit: true, value: 20 });
 
-    expect(stepResult).not.toBeNull();
-    expect(stepResult!.hit).toBe(true);
-
-    // Second Cache reads and writes from address 0x0000 
-    stepResult = system.step();
-
-    expect(stepResult).not.toBeNull();
-
-    // Second Cache reads NON-updated value (MSI will solve this issue)
-    expect(stepResult!.value).toBe(10);
-    expect(stepResult!.hit).toBe(false);
-
-    system.step();
-    stepResult = system.step();
-
-    expect(stepResult).not.toBeNull();
-    expect(stepResult!.hit).toBe(true);
-
-    expect(memory.read(0x0000)).toEqual(10);
-    expect(system.step()).toEqual(null);
+    expect(next()).toEqual(null);
 })

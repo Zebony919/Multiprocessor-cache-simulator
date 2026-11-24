@@ -121,4 +121,22 @@ describe('SetAssociativeCache', () => {
         // Write-backs update main memory after eviction
         expect(memory.read(0x0000)).toEqual(20);
     })
+
+    test('memory is not updated if clean line evicted', () => {
+        const memory = new Memory();
+        const cache = new SetAssociativeCache(0, memory, 2, 2, 1);
+
+        memory.write(0x0000, 10);
+        memory.write(0x0004, 20);
+
+        expect(cache.read(0x0000)).toEqual({ hit: false, value: 10 });
+        memory.write(0x0000, 50);
+
+        // evicts clean line, but memory still holds its version and not the cache version
+        expect(cache.read(0x0004)).toEqual({ hit: false, value: 20 });
+        expect(memory.read(0x0000)).toEqual(50);
+
+        // proving the line was evicted
+        expect(cache.read(0x0000)).toEqual({ hit: false, value: 50 })
+    })
 });
