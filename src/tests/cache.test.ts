@@ -3,7 +3,7 @@ import { Memory } from '../memory.ts';
 import { SetAssociativeCache } from '../cache.ts';
 
 function access(cache: SetAssociativeCache, memory: Memory, address: number, type: 'R' | 'W', value?: number): { hit: boolean, value: number } {
-    const hit = cache.fetchBlock(address) !== null;
+    const hit = cache.fetchLineAddress(address) !== null;
     if (!hit) {
         const base = Math.floor(address / cache.blockSize) * cache.blockSize;
         cache.install(address, Array.from({ length: cache.blockSize }, (_, i) => memory.read(base + i)));

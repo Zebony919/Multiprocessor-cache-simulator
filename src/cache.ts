@@ -1,6 +1,9 @@
 import { Memory } from './memory.ts'
 
+export type State = 'M' | 'O' | 'E' | 'S' | 'I';
+
 export type CacheLine = {
+    state: State,
     valid: boolean,
     dirty: boolean,
     tag: number,
@@ -41,6 +44,7 @@ export class SetAssociativeCache {
         this.nextWay = Array<number>(numSets).fill(0);
         this.sets = Array.from({ length: numSets }, () =>
             (Array.from({ length: numWays }, () => ({
+                state: 'I',
                 valid: false,
                 dirty: false,
                 tag: 0,
@@ -70,6 +74,18 @@ export class SetAssociativeCache {
         return way;
     }
 
+    private findLine(setIndex: number, tag: number): { way: number, cacheLine: CacheLine } | null {
+        const set = this.sets[setIndex];
+
+        for (let way = 0; way < this.numWays; way++) {
+            if (set[way].valid && set[way].tag === tag) {
+                return { way: way, cacheLine: set[way]};
+            }
+        }
+
+        return null;
+    }
+
     public install(address: number, blockData: number[]): void {
         const { tag, index: setIndex } = this.splitAddress(address);
         const way = this.chooseWay(setIndex);
@@ -93,28 +109,22 @@ export class SetAssociativeCache {
         line.data = [...blockData];
     }
 
-    private findLine(setIndex: number, tag: number): { way: number, cacheLine: CacheLine } | null {
-        const set = this.sets[setIndex];
-
-        for (let way = 0; way < this.numWays; way++) {
-            if (set[way].valid && set[way].tag === tag) {
-                return { way: way, cacheLine: set[way]};
-            }
-        }
-
-        return null;
-    }
-
-    public fetchBlock(address: number): number[] | null {
+    public fetchLineAddress(address: number): CacheLine | null {
         const { tag, index } = this.splitAddress(address);
         const foundLine = this.findLine(index, tag);
-        return foundLine ? [...foundLine.cacheLine.data] : null;
+        return foundLine ? foundLine.cacheLine : null;
+    }
+
+    public fetchLineIndicies(setIndex: number, way: number): CacheLine {
+        return this.sets[setIndex][way];
     }
 
     public read(address: number): CacheResult {
         const { tag, index: setIndex, offset } = this.splitAddress(address);
         const foundLine = this.findLine(setIndex, tag);
+
         if (!foundLine) throw new Error(`read of uncaches value at ${address}`);
+        foundLine.cacheLine.state = 'S';
 
         const value = foundLine!.cacheLine.data[offset];
         return { hit: value !== 0, value };
@@ -129,6 +139,7 @@ export class SetAssociativeCache {
         const foundLine = this.findLine(setIndex, tag);
 
         foundLine!.cacheLine.valid = true;
+        foundLine!.cacheLine.state = 'M';
         foundLine!.cacheLine.data[offset] = value;
         foundLine!.cacheLine.dirty = true;
         return { hit: true, value };

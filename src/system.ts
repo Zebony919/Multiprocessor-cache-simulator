@@ -1,7 +1,5 @@
 import { Memory } from './memory.ts'
-import { SetAssociativeCache } from './cache.ts'
-
-export type State = 'M' | 'O' | 'E' | 'S' | 'I';
+import { SetAssociativeCache, type State } from './cache.ts'
 
 export type Op =
       { cacheId: number, type: 'R', address: number }
@@ -35,34 +33,19 @@ export class System {
         )
     }
 
-    public load(program: Op[]): void {
-        for (let i = 0; i < program.length; i++) {
-            this.validateAddress(program[i].address);
-        }
-
-        this.program = program;
-        this.pc = 0;
-    }
-
-    public step(): StepResult | null {
-        if (this.pc >= this.program.length) return null;
-
-        const op = this.program[this.pc++];
-        return this.execute(op);
-    }
-
     private validateAddress(address: number): void {
         if (!Number.isInteger(address) || address < 0) {
             throw new RangeError("Address must be a positive integer!")
         }
     }
 
+    // Finds the missed data in either another cache or memory as last resort
     private fetchBlock(address: number, cacheId: number): number[] {
         for (let i = 0; i < this.caches.length; i++) {
             if (i == cacheId) continue;
 
-            const block = this.caches[i].fetchBlock(address);
-            if (block) return block;
+            const line = this.caches[i].fetchLineAddress(address);
+            if (line) return line.data;
         }
 
         const { blockSize } = this.caches[cacheId];
@@ -72,7 +55,7 @@ export class System {
 
     private execute(instruction: Op): StepResult {
         const cache = this.caches[instruction.cacheId];
-        const hit = cache.fetchBlock(instruction.address) != null;
+        const hit = cache.fetchLineAddress(instruction.address) != null;
         if (!hit) cache.install(instruction.address, this.fetchBlock(instruction.address, instruction.cacheId));
 
         // Executes one instruction from given program
@@ -89,5 +72,25 @@ export class System {
         results.hit = hit;
 
         return results;
+    }
+
+    public fetchCache(id: number) {
+        return this.caches[id];
+    }
+
+    public load(program: Op[]): void {
+        for (let i = 0; i < program.length; i++) {
+            this.validateAddress(program[i].address);
+        }
+
+        this.program = program;
+        this.pc = 0;
+    }
+
+    public step(): StepResult | null {
+        if (this.pc >= this.program.length) return null;
+
+        const op = this.program[this.pc++];
+        return this.execute(op);
     }
 }
