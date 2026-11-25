@@ -103,8 +103,12 @@ export class System {
         return results;
     }
 
-    public fetchCache(id: number) {
+    public fetchCache(id: number): SetAssociativeCache {
         return this.caches[id];
+    }
+
+    public addCache(cache: SetAssociativeCache): void {
+        this.caches[this.caches.length] = cache;
     }
 
     public load(program: Op[]): void {
