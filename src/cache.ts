@@ -120,12 +120,15 @@ export class SetAssociativeCache {
     }
 
     public getState(address: number): State {
-        return this.fetchLineAddress(address)!.state;
+        const { tag, index } = this.splitAddress(address);
+        const foundLine = this.findLine(tag, index);
+        return foundLine?.cacheLine.state ?? 'I';
     }
 
     public setState(address: number, state: State): void {
-        const line = this.fetchLineAddress(address);
-        line!.state = state;
+        const { tag, index } = this.splitAddress(address);
+        const foundLine = this.findLine(tag, index);
+        if (foundLine) foundLine.cacheLine.state = state;
     }
 
     public read(address: number): CacheResult {

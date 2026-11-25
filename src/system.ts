@@ -1,5 +1,6 @@
 import { Memory } from './memory.ts'
 import { SetAssociativeCache, type State } from './cache.ts'
+import { type BusMsg, onProcess, onSnoop } from './protocols.ts';
 
 export type Op =
       { cacheId: number, type: 'R', address: number }
@@ -33,6 +34,12 @@ export class System {
         )
     }
 
+    private writeBlockToMemory(address: number, block: number[]): void {
+        for (let i = 0; i < block.length; i++) {
+            this.mainMemory.write(address + i, block[i]);
+        }
+    }
+
     private validateAddress(address: number): void {
         if (!Number.isInteger(address) || address < 0) {
             throw new RangeError("Address must be a positive integer!")
@@ -53,12 +60,33 @@ export class System {
         return Array.from({ length: blockSize }, (_, i) => this.mainMemory.read(base + i));
     }
 
+    // Update every version of an address in each cache
+    private broadcast(msg: BusMsg, address: number, cacheRequester: number): void {
+        for (let i = 0; i < this.caches.length; i++) {
+            if (i == cacheRequester) continue;
+
+            const cache = this.caches[i];
+            const { next, flush } = onSnoop(cache.getState(address), msg);
+            if (flush) this.writeBlockToMemory(address, cache.fetchLineAddress(address)!.data);
+
+            cache.setState(address, next);
+        }
+    }
+
     private execute(instruction: Op): StepResult {
         const cache = this.caches[instruction.cacheId];
         const hit = cache.fetchLineAddress(instruction.address) != null;
-        if (!hit) cache.install(instruction.address, this.fetchBlock(instruction.address, instruction.cacheId));
+        const state = this.caches[instruction.cacheId].getState(instruction.address);
+        const { busMsg, next } = onProcess(state, instruction.type);
 
-        // Executes one instruction from given program
+        if (busMsg != 'None') {
+            this.broadcast(busMsg, instruction.address, instruction.cacheId);
+        }
+
+        if (!hit) {
+            cache.install(instruction.address, this.fetchBlock(instruction.address, instruction.cacheId));
+        }
+
         const results: StepResult = {
             op: instruction,
             hit: false,
@@ -71,6 +99,7 @@ export class System {
         results.value = value;
         results.hit = hit;
 
+        cache.setState(instruction.address, next);
         return results;
     }
 
