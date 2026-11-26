@@ -231,30 +231,31 @@ describe('System with states', () => {
         expect(memory.read(0x0000)).toEqual(20);
     })
 
-    test('Multiple addresses are independant and do not conflict states', () => {
+    test('Different blocks are independant and do not conflict states', () => {
         system = new System(3, memory);
         program = [
             { cacheId: 0, type: 'R', address: 0x0000 },
-            { cacheId: 1, type: 'R', address: 0x0002 },
+            { cacheId: 1, type: 'R', address: 0x0004 },
 
             { cacheId: 0, type: 'W', address: 0x0000, value: 20 },
-            { cacheId: 2, type: 'W', address: 0x0002, value: 40 },
+            { cacheId: 2, type: 'W', address: 0x0004, value: 40 },
         ];
 
+        memory.write(0x0004, 20);
         system.load(program);
         
         expect(system.step()).toMatchObject({ hit: false, value: 12 });
         expect(curState(0, 0x0000)).toEqual('S');
         expect(system.step()).toMatchObject({ hit: false, value: 20 });
-        expect(curState(1, 0x0002)).toEqual('S');
+        expect(curState(1, 0x0004)).toEqual('S');
 
         expect(system.step()).toMatchObject({ hit: true, value: 20 });
         expect(curState(0, 0x0000)).toEqual('M');
-        expect(curState(1, 0x0002)).toEqual('S'); // Cache 1 was not affected as it's a different address
+        expect(curState(1, 0x0004)).toEqual('S'); // Cache 1 was not affected as it's a different address
 
         expect(system.step()).toMatchObject({ hit: false, value: 40 });
-        expect(curState(1, 0x0002)).toEqual('I');
-        expect(curState(2, 0x0002)).toEqual('M');
+        expect(curState(1, 0x0004)).toEqual('I');
+        expect(curState(2, 0x0004)).toEqual('M');
     })
 
     test('Round Robin eviction AND more than two ways', () => {

@@ -30,7 +30,7 @@ export class System {
         this.mainMemory = memory;
 
         this.caches = Array.from({ length: numCaches}, 
-            (_, i) => new SetAssociativeCache(i, this.mainMemory, 2, 2, 2)
+            (_, i) => new SetAssociativeCache(i, this.mainMemory, 4, 2, 2)
         )
     }
 
