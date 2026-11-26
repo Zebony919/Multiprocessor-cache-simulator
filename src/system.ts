@@ -123,6 +123,10 @@ export class System {
         this.pc = 0;
     }
 
+    public reset(): void {
+        this.pc = 0;
+    }
+
     public step(): StepResult | null {
         if (this.pc >= this.program.length) return null;
 

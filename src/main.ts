@@ -75,4 +75,10 @@ stepButton!.addEventListener('click', () => {
     }
 });
 
+const resetButton = document.getElementById("reset");
+resetButton!.addEventListener('click', () => {
+    system.load(program);
+    render(system.step());
+});
+
 render(null);
