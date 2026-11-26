@@ -67,7 +67,10 @@ export class System {
 
             const cache = this.caches[i];
             const { next, flush } = onSnoop(cache.getState(address), msg);
-            if (flush) this.writeBlockToMemory(address, cache.fetchLineAddress(address)!.data);
+            if (flush) {
+                const blockBase = Math.floor(address / cache.blockSize) * cache.blockSize;
+                this.writeBlockToMemory(blockBase, cache.fetchLineAddress(address)!.data);
+            }
 
             cache.setState(address, next);
         }

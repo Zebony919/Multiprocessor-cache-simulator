@@ -4,8 +4,6 @@ export type State = 'M' | 'O' | 'E' | 'S' | 'I';
 
 export type CacheLine = {
     state: State,
-    valid: boolean,
-    dirty: boolean,
     tag: number,
     data: number[],
 }
@@ -45,8 +43,6 @@ export class SetAssociativeCache {
         this.sets = Array.from({ length: numSets }, () =>
             (Array.from({ length: numWays }, () => ({
                 state: 'I',
-                valid: false,
-                dirty: false,
                 tag: 0,
                 data: Array<number>(this.blockSize).fill(0)
             })))
@@ -64,7 +60,7 @@ export class SetAssociativeCache {
 
     private chooseWay(setIndex: number): number {
         for (let way = 0; way < this.numWays; way++) {
-            if (!this.sets[setIndex][way].valid) {
+            if (this.sets[setIndex][way].state == 'I') {
                 return way;
             }
         }
@@ -78,7 +74,7 @@ export class SetAssociativeCache {
         const set = this.sets[setIndex];
 
         for (let way = 0; way < this.numWays; way++) {
-            if (set[way].valid && set[way].tag === tag) {
+            if (set[way].state != 'I' && set[way].tag === tag) {
                 return { way: way, cacheLine: set[way]};
             }
         }
@@ -91,8 +87,8 @@ export class SetAssociativeCache {
         const way = this.chooseWay(setIndex);
         const line = this.sets[setIndex][way];
 
-        // Updates Main memory if the line holds real and out of date data before replacing
-        if (line.valid && line.dirty) {
+        // M and O contain the only potentially newer-than-memory copies.
+        if (line.state === 'M' || line.state === 'O') {
             const oldBlockNumber = line.tag * this.numSets + setIndex;
             const oldBlockBase = oldBlockNumber * this.blockSize;
 
@@ -102,9 +98,8 @@ export class SetAssociativeCache {
             }
         }
 
-        // Replaces line with new block
-        line.valid = true;
-        line.dirty = false;
+        // A newly installed clean block is shared until the requesting operation changes its state.
+        line.state = 'S';
         line.tag = tag;
         line.data = [...blockData];
     }
@@ -136,10 +131,8 @@ export class SetAssociativeCache {
         const foundLine = this.findLine(setIndex, tag);
 
         if (!foundLine) throw new Error(`read of uncaches value at ${address}`);
-        foundLine.cacheLine.state = 'S';
-
-        const value = foundLine!.cacheLine.data[offset];
-        return { hit: value !== 0, value };
+        const value = foundLine.cacheLine.data[offset];
+        return { hit: true, value };
     }
 
     public write(address: number, value: number): CacheResult {
@@ -150,10 +143,8 @@ export class SetAssociativeCache {
         const { tag, index: setIndex, offset } = this.splitAddress(address);
         const foundLine = this.findLine(setIndex, tag);
 
-        foundLine!.cacheLine.valid = true;
         foundLine!.cacheLine.state = 'M';
         foundLine!.cacheLine.data[offset] = value;
-        foundLine!.cacheLine.dirty = true;
         return { hit: true, value };
     }
 };
