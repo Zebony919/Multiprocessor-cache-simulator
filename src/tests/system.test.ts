@@ -11,7 +11,7 @@ describe('System with NO states', () => {
 
     beforeEach(() => {
         memory = new Memory();
-        system = new System(1, memory);
+        system = new System(1, memory, 'MSI');
 
         next = () => {
             const stepResult = system.step();
@@ -38,11 +38,6 @@ describe('System with NO states', () => {
             { cacheId: 0, type: 'R', address: 0x0000 },
         ];
 
-        const next = () => {
-            const stepResult = system.step();
-            return stepResult!;
-        };
-
         system.load(program);
 
         expect(next()).toMatchObject({ hit: false, value: 12 });
@@ -53,7 +48,7 @@ describe('System with NO states', () => {
     })
 
     test('System with two caches are incoherent (no states)', () => {
-        const system = new System(2, memory);
+        system = new System(2, memory, 'MSI');
         memory.write(0x0000, 10);
 
         let program: Op[] = [
@@ -64,11 +59,6 @@ describe('System with NO states', () => {
             { cacheId: 1, type: 'W', address: 0x0000, value: 20 },
             { cacheId: 1, type: 'R', address: 0x0000 },
         ];
-
-        const next = () => {
-            const stepResult = system.step();
-            return stepResult!;
-        };
 
         system.load(program);
 
@@ -95,7 +85,7 @@ describe('System with states', () => {
 
     beforeEach(() => {
         memory = new Memory();
-        system = new System(1, memory);
+        system = new System(1, memory, 'MSI');
 
         memory.write(0x0000, 12);
         memory.write(0x0001, 14);
@@ -151,7 +141,7 @@ describe('System with states', () => {
     })
 
     test('Line moves from State M to S after snoop read AND State S to I on snoop write', () => {
-        system = new System(2, memory);
+        system = new System(2, memory, 'MSI');
         program = [
             { cacheId: 0, type: 'R', address: 0x0000 },
             { cacheId: 0, type: 'W', address: 0x0000, value: 99 },
@@ -177,7 +167,7 @@ describe('System with states', () => {
     })
 
     test('Line moves from State M to I after snoop write', () => {
-        system = new System(2, memory);
+        system = new System(2, memory, 'MSI');
         program = [
             { cacheId: 0, type: 'R', address: 0x0000 },
             { cacheId: 0, type: 'W', address: 0x0000, value: 99 },
@@ -198,7 +188,7 @@ describe('System with states', () => {
     })
 
     test('Write to line in I with another in S and no flush', () => {
-        system = new System(2, memory);
+        system = new System(2, memory, 'MSI');
         program = [
             { cacheId: 0, type: 'R', address: 0x0000 },
             { cacheId: 1, type: 'W', address: 0x0000, value: 50 },
@@ -215,7 +205,7 @@ describe('System with states', () => {
     })
 
     test('Evict line in M so its value is flushed to memory', () => {
-        system = new System(2, memory);
+        system = new System(2, memory, 'MSI');
         program = [
             { cacheId: 0, type: 'W', address: 0x0000, value: 20 },
             { cacheId: 1, type: 'W', address: 0x0000, value: 50 },
@@ -232,7 +222,7 @@ describe('System with states', () => {
     })
 
     test('Different blocks are independant and do not conflict states', () => {
-        system = new System(3, memory);
+        system = new System(3, memory, 'MSI');
         program = [
             { cacheId: 0, type: 'R', address: 0x0000 },
             { cacheId: 1, type: 'R', address: 0x0004 },
@@ -259,7 +249,7 @@ describe('System with states', () => {
     })
 
     test('Round Robin eviction AND more than two ways', () => {
-        system = new System(2, memory);
+        system = new System(2, memory, 'MSI');
         
         memory.write(0x0004, 21);
         memory.write(0x0008, 22);
@@ -349,7 +339,7 @@ test('MSI keeps invariants on random traces', () => {
     for (let seed = 0; seed < 500; seed++) {
         const rand = mulberry32(seed);
         const memory = new Memory();
-        const system = new System(numCaches, memory);
+        const system = new System(numCaches, memory, 'MSI');
         const trace = randomTrace(rand, numCaches, 50, addresses);
         const model = new Map<number, number>();
 

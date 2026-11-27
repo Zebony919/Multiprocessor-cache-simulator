@@ -1,6 +1,6 @@
 import { Memory } from './memory.ts'
 import { SetAssociativeCache, type State } from './cache.ts'
-import { type BusMsg, onProcess, onSnoop } from './protocols.ts';
+import { type BusMsg, type ProtocolType, onProcess, onSnoop } from './protocols.ts';
 
 export type Op =
       { cacheId: number, type: 'R', address: number }
@@ -23,12 +23,14 @@ export type Event =
 export class System {
     pc = 0;
     
+    private protocolType
     private mainMemory: Memory;
     private caches: SetAssociativeCache[];
     private program: Op[] = [];
 
-    constructor(numCaches: number, memory: Memory) {
+    constructor(numCaches: number, memory: Memory, protocol: ProtocolType) {
         this.mainMemory = memory;
+        this.protocolType = protocol;
 
         this.caches = Array.from({ length: numCaches}, 
             (_, i) => new SetAssociativeCache(i, this.mainMemory, 4, 2, 2)
@@ -67,8 +69,8 @@ export class System {
             if (i == cacheRequester) continue;
 
             const cache = this.caches[i];
-            const { next, flush } = onSnoop(cache.getState(address), msg);
-            if (flush) {
+            const { next, writeBack } = onSnoop(cache.getState(address), msg, this.protocolType);
+            if (writeBack) {
                 const blockBase = Math.floor(address / cache.blockSize) * cache.blockSize;
                 this.writeBlockToMemory(blockBase, cache.fetchLineAddress(address)!.data);
             }
@@ -81,7 +83,7 @@ export class System {
         const cache = this.caches[instruction.cacheId];
         const hit = cache.fetchLineAddress(instruction.address) != null;
         const state = this.caches[instruction.cacheId].getState(instruction.address);
-        const { busMsg, next } = onProcess(state, instruction.type);
+        const { busMsg, next } = onProcess(state, instruction.type, this.protocolType, false);
 
         if (busMsg != 'None') {
             this.broadcast(busMsg, instruction.address, instruction.cacheId);

@@ -7,6 +7,7 @@ let numCaches = 2;
 const memory = new Memory();
 const system = new System(numCaches, memory);
 
+// Hardcoded for now before implementing some user inputted version
 memory.write(0x0000, 12);
 
 const program: Op[] = [
