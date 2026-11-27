@@ -77,8 +77,24 @@ stepButton!.addEventListener('click', () => {
 
 const resetButton = document.getElementById("reset");
 resetButton!.addEventListener('click', () => {
+    system.clearCaches();
     system.load(program);
-    render(system.step());
+    render(null);
 });
+
+const previousButton = document.getElementById("previous");
+previousButton!.addEventListener('click', () => {
+    // move back one step in the program by resetting and running n - 1 steps
+    const oldPc = system.pc;
+
+    system.clearCaches();
+    system.load(program);
+
+    for (let i = 0; i < oldPc - 1; i++) {
+        system.step();
+    }
+
+    render(null);
+})
 
 render(null);

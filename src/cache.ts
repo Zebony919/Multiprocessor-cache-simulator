@@ -18,9 +18,9 @@ export class SetAssociativeCache {
     blockSize: number;
     numSets: number;
     numWays: number;
+    sets: CacheLine[][];
 
     private readonly memory: Memory;
-    private readonly sets: CacheLine[][];
     private readonly nextWay: number[];
 
     constructor(id: number, memory: Memory, blockSize: number, numSets: number, numWays: number) {
@@ -124,6 +124,16 @@ export class SetAssociativeCache {
         const { tag, index } = this.splitAddress(address);
         const foundLine = this.findLine(index, tag);
         if (foundLine) foundLine.cacheLine.state = state;
+    }
+
+    public clearCache(): void {
+        this.sets = Array.from({ length: this.numSets }, () =>
+            (Array.from({ length: this.numWays }, () => ({
+                state: 'I',
+                tag: 0,
+                data: Array<number>(this.blockSize).fill(0)
+            })))
+        );
     }
 
     public read(address: number): CacheResult {

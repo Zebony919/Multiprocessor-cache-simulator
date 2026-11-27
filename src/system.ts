@@ -21,10 +21,11 @@ export type Event =
   | { type: 'fill'; cpu: number; address: number; source: 'memory' | number };
 
 export class System {
+    pc = 0;
+    
     private mainMemory: Memory;
     private caches: SetAssociativeCache[];
     private program: Op[] = [];
-    private pc = 0;
 
     constructor(numCaches: number, memory: Memory) {
         this.mainMemory = memory;
@@ -123,8 +124,10 @@ export class System {
         this.pc = 0;
     }
 
-    public reset(): void {
-        this.pc = 0;
+    public clearCaches(): void {
+        for (let i = 0; i < this.caches.length; i++) {
+            this.caches[i].clearCache();
+        }
     }
 
     public step(): StepResult | null {
