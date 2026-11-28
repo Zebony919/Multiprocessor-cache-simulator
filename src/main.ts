@@ -5,17 +5,24 @@ import { System, type StepResult, type Op } from './system.ts';
 
 let numCaches = 2;
 const memory = new Memory();
-const system = new System(numCaches, memory);
+const system = new System(numCaches, memory, 'MOESI');
 
 // Hardcoded for now before implementing some user inputted version
 memory.write(0x0000, 12);
+memory.write(0x0004, 14);
+memory.write(0x0008, 20);
 
 const program: Op[] = [
     { cacheId: 0, type: 'R', address: 0x0000 },
-    { cacheId: 0, type: 'W', address: 0x0000, value: 99 },
-
+    { cacheId: 0, type: 'W', address: 0x0000, value: 10 },
     { cacheId: 1, type: 'R', address: 0x0000 },
-    { cacheId: 1, type: 'W', address: 0x0000, value: 50 },
+    { cacheId: 2, type: 'R', address: 0x0000 },
+    { cacheId: 1, type: 'W', address: 0x0000, value: 25 },
+    { cacheId: 2, type: 'R', address: 0x0004 },
+    { cacheId: 0, type: 'R', address: 0x0004 },
+    { cacheId: 2, type: 'W', address: 0x0004, value: 99 },
+    { cacheId: 0, type: 'R', address: 0x0000 },
+    { cacheId: 2, type: 'W', address: 0x0000, value: 77 },
 ];
 
 system.load(program);
@@ -78,6 +85,7 @@ stepButton!.addEventListener('click', () => {
 
 const resetButton = document.getElementById("reset");
 resetButton!.addEventListener('click', () => {
+    memory.clearMemory();
     system.clearCaches();
     system.load(program);
     render(null);

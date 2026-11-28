@@ -87,9 +87,10 @@ describe('System with states', () => {
         memory = new Memory();
         system = new System(1, memory, 'MSI');
 
+        // Cache's are defaulted to blockSize 4, so each address must be four apart to test different lines
         memory.write(0x0000, 12);
-        memory.write(0x0001, 14);
-        memory.write(0x0002, 20);
+        memory.write(0x0004, 14);
+        memory.write(0x0008, 20);
 
         program = [
             { cacheId: 0, type: 'R', address: 0x0000 },
@@ -278,6 +279,130 @@ describe('System with states', () => {
         
         expect(system.step()).toMatchObject({ hit: false, value: 60 });
         expect(newCache.fetchLineIndicies(0, 0)!.data[0]).toEqual(60);
+    })
+
+    test('Exclusive State behaviour in MESI', () => {
+        system = new System(3, memory, 'MESI');
+
+        program = [
+            { cacheId: 0, type: 'R', address: 0x0000 },
+            { cacheId: 0, type: 'W', address: 0x0000, value: 20 },
+            { cacheId: 1, type: 'R', address: 0x0004 },
+            { cacheId: 2, type: 'R', address: 0x0004 },
+            { cacheId: 2, type: 'W', address: 0x0004, value: 40 },
+        ];
+
+        system.load(program);
+        system.step();
+
+        expect(curState(0, 0x0000)).toEqual('E'); // Line moves from State I to E on local read with no shared lines
+        expect(system.step()).toMatchObject({ hit: true, value: 20 });
+        expect(curState(0, 0x0000)).toEqual('M'); // Moves to M on local write
+        expect(system.step()).toMatchObject({ hit: false, value: 14 });
+        expect(curState(1, 0x0004)).toEqual('E'); // Only line with 0x0001 so in State E
+        expect(system.step()).toMatchObject({ hit: false, value: 14 });
+        expect(curState(1, 0x0004)).toEqual('S'); // Cache1 moves to S as Cache2 now shares 0x0001
+        expect(curState(2, 0x0004)).toEqual('S'); // Cache2 in State S
+        expect(system.step()).toMatchObject({ hit: true, value: 40 });
+        expect(curState(1, 0x0004)).toEqual('I'); // Cache1 reads BusRdX and moves to invalid state
+        expect(curState(2, 0x0004)).toEqual('M'); // Cache2 moves to M state after modifying and having dirty data
+    })
+
+    test('Owner State behaviour in MOSI', () => {
+        system = new System(3, memory, 'MOSI');
+
+        program = [
+            { cacheId: 0, type: 'W', address: 0x0000, value: 20 },
+            { cacheId: 1, type: 'R', address: 0x0000 },
+            { cacheId: 0, type: 'W', address: 0x0000, value: 40 },
+            { cacheId: 1, type: 'R', address: 0x0000 },
+            { cacheId: 1, type: 'W', address: 0x0000, value: 50 },
+        ];
+
+        system.load(program);
+        expect(system.step()).toMatchObject({ hit: false, value: 20 });
+        expect(curState(0, 0x0000)).toEqual('M');
+        expect(system.step()).toMatchObject({ hit: false, value: 20 });
+        expect(curState(0, 0x0000)).toEqual('O'); // Cache0 snoops read from Cache1 and supplies data instead
+        expect(curState(1, 0x0000)).toEqual('S');
+        expect(system.step()).toMatchObject({ hit: true, value: 40 });
+        expect(curState(0, 0x0000)).toEqual('M');
+        expect(curState(1, 0x0000)).toEqual('I'); // Cache1 snoops BusRdX from Cache0 and so moves to state I
+        expect(system.step()).toMatchObject({ hit: false, value: 40 });
+        expect(curState(0, 0x0000)).toEqual('O'); 
+        expect(curState(1, 0x0000)).toEqual('S');
+        expect(system.step()).toMatchObject({ hit: true, value: 50 });
+        expect(curState(0, 0x0000)).toEqual('I'); // Cache0 snoops Cache1 writing to 0x0000 and so moves to state I
+        expect(curState(1, 0x0000)).toEqual('M');
+    })
+
+    test('Exclusive and Owner behaviour in MOESI', () => {
+        system = new System(3, memory, 'MOESI');
+
+        program = [
+            { cacheId: 0, type: 'R', address: 0x0000 },
+            { cacheId: 0, type: 'W', address: 0x0000, value: 10 },
+            { cacheId: 1, type: 'R', address: 0x0000 },
+            { cacheId: 2, type: 'R', address: 0x0000 },
+            { cacheId: 1, type: 'W', address: 0x0000, value: 25 },
+            { cacheId: 2, type: 'R', address: 0x0004 },
+            { cacheId: 0, type: 'R', address: 0x0004 },
+            { cacheId: 2, type: 'W', address: 0x0004, value: 99 },
+            { cacheId: 0, type: 'R', address: 0x0000 },
+            { cacheId: 2, type: 'W', address: 0x0000, value: 77 },
+        ];
+
+        system.load(program);
+
+        // Cold read -> Exclusive (E) in cache 0
+        expect(system.step()).toMatchObject({ hit: false, value: 12 });
+        expect(curState(0, 0x0000)).toEqual('E');
+
+        // Write to Exclusive -> Modified (M) in cache 0 (silent upgrade)
+        expect(system.step()).toMatchObject({ hit: true, value: 10 });
+        expect(curState(0, 0x0000)).toEqual('M');
+
+        // Read by cache 1 -> cache 0 transitions to Owned (O) and supplies data, cache 1 gets Shared (S)
+        expect(system.step()).toMatchObject({ hit: false, value: 10 });
+        expect(curState(0, 0x0000)).toEqual('O');
+        expect(curState(1, 0x0000)).toEqual('S');
+
+        // Another read by cache 2 -> stays O in cache 0, S in cache 1 and cache 2
+        expect(system.step()).toMatchObject({ hit: false, value: 10 });
+        expect(curState(0, 0x0000)).toEqual('O');
+        expect(curState(1, 0x0000)).toEqual('S');
+        expect(curState(2, 0x0000)).toEqual('S');
+
+        // Write by cache 1 -> cache 1 becomes Modified (M), cache 0 and cache 2 become Invalid (I)
+        expect(system.step()).toMatchObject({ hit: true, value: 25 });
+        expect(curState(0, 0x0000)).toEqual('I');
+        expect(curState(1, 0x0000)).toEqual('M');
+        expect(curState(2, 0x0000)).toEqual('I');
+
+        // Second address: cold read by cache 2 -> Exclusive (E) in cache 2
+        expect(system.step()).toMatchObject({ hit: false, value: 14 });
+        expect(curState(2, 0x0004)).toEqual('E');
+
+        // Read of 0x0004 by cache 0 -> cache 2 downgrades E -> S, cache 0 becomes S
+        expect(system.step()).toMatchObject({ hit: false, value: 14 });
+        expect(curState(0, 0x0004)).toEqual('S');
+        expect(curState(2, 0x0004)).toEqual('S');
+
+        // Write to 0x0004 by cache 2 -> cache 2 upgrades S -> M, cache 0 invalidates S -> I
+        expect(system.step()).toMatchObject({ hit: true, value: 99 });
+        expect(curState(0, 0x0004)).toEqual('I');
+        expect(curState(2, 0x0004)).toEqual('M');
+
+        // Read of 0x0000 by cache 0 -> gets 25 from cache 1; cache 1 moves M -> O, cache 0 becomes S
+        expect(system.step()).toMatchObject({ hit: false, value: 25 });
+        expect(curState(0, 0x0000)).toEqual('S');
+        expect(curState(1, 0x0000)).toEqual('O');
+
+        // Write to 0x0000 by cache 2 -> cache 2 becomes Modified (M), cache 0 (S) and cache 1 (O) become Invalid (I)
+        expect(system.step()).toMatchObject({ hit: false, value: 77 });
+        expect(curState(0, 0x0000)).toEqual('I');
+        expect(curState(1, 0x0000)).toEqual('I');
+        expect(curState(2, 0x0000)).toEqual('M');
     })
 })
 

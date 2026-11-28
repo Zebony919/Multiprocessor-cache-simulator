@@ -44,7 +44,7 @@ export function onSnoop(state: State, msg: BusMsg, protocol: ProtocolType): { ne
         } else if ((msg == 'BusRdX' ) || (msg == 'BusUpgr')) {
             return { next: 'I', supplyData: false, writeBack: false, shared: false };
         }
-    } else if (state == 'M' || 'O') {
+    } else if (state == 'M' || state == 'O') {
         if (msg == 'BusRd') {
             if (protocol == 'MSI') {
                 return { next: 'S', supplyData: true, writeBack: true, shared: true };

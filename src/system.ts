@@ -63,13 +63,28 @@ export class System {
         return Array.from({ length: blockSize }, (_, i) => this.mainMemory.read(base + i));
     }
 
+    private sharedByOthers(address: number): boolean {
+        for (let i = 0; i < this.caches.length; i++) {
+            const foundLine = this.caches[i].fetchLineAddress(address);
+
+            if (foundLine) {
+                if (foundLine.state == 'M' || foundLine.state == 'O' ||
+                    foundLine.state == 'E' || foundLine.state == 'S') {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     // Update every version of an address in each cache
     private broadcast(msg: BusMsg, address: number, cacheRequester: number): void {
         for (let i = 0; i < this.caches.length; i++) {
             if (i == cacheRequester) continue;
 
             const cache = this.caches[i];
-            const { next, writeBack } = onSnoop(cache.getState(address), msg, this.protocolType);
+            const { next, supplyData, writeBack, shared } = onSnoop(cache.getState(address), msg, this.protocolType);
             if (writeBack) {
                 const blockBase = Math.floor(address / cache.blockSize) * cache.blockSize;
                 this.writeBlockToMemory(blockBase, cache.fetchLineAddress(address)!.data);
@@ -83,7 +98,9 @@ export class System {
         const cache = this.caches[instruction.cacheId];
         const hit = cache.fetchLineAddress(instruction.address) != null;
         const state = this.caches[instruction.cacheId].getState(instruction.address);
-        const { busMsg, next } = onProcess(state, instruction.type, this.protocolType, false);
+
+        const shared = this.sharedByOthers(instruction.address);
+        const { busMsg, next } = onProcess(state, instruction.type, this.protocolType, shared);
 
         if (busMsg != 'None') {
             this.broadcast(busMsg, instruction.address, instruction.cacheId);

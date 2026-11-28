@@ -8,4 +8,8 @@ export class Memory {
     public write(address: number, value: number): void {
         this.data.set(address, value);
     }
+
+    public clearMemory(): void {
+        this.data.clear();
+    }
 }
