@@ -3,7 +3,7 @@ import { Memory } from './memory.ts';
 import { SetAssociativeCache } from './cache.ts';
 import { System, type StepResult, type Op } from './system.ts';
 
-let numCaches = 2;
+let numCaches = 3;
 const memory = new Memory();
 const system = new System(numCaches, memory, 'MOESI');
 
@@ -33,12 +33,18 @@ function render(lastStep: StepResult | null): void {
     cacheDiv!.replaceChildren();
 
     for (let i = 0; i < numCaches; i++) {
-        cacheDiv!.appendChild(renderCache(system.fetchCache(i)));
+        cacheDiv!.appendChild(renderCache(i, system.fetchCache(i)));
     }
 };
 
-function renderCache(cache: SetAssociativeCache): HTMLElement {
+function renderCache(id: number, cache: SetAssociativeCache): HTMLElement {
     // Render a single cache
+    const cacheDiv = document.createElement("div");
+
+    const cacheTitle = document.createElement("h1");
+    cacheTitle.textContent = `Cache ${id}`;
+    cacheDiv.appendChild(cacheTitle);
+
     const table = document.createElement("table");
     const body = table.createTBody();
 
@@ -70,7 +76,8 @@ function renderCache(cache: SetAssociativeCache): HTMLElement {
         }
     }
 
-    return table;
+    cacheDiv.appendChild(table);
+    return cacheDiv;
 };
 
 const stepButton = document.getElementById("step");
